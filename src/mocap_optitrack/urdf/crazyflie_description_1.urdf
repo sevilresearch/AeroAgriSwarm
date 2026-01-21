@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<robot name="Robot_1">
+  <link name="base_link">
+    <origin rpy="0 0 0" xyz="0.0 0 0" />
+    <visual>
+        <geometry>
+          <mesh filename="package://mocap_optitrack/urdf/cf2_assembly_with_props.dae" scale="5.0 5.0 5.0"/>
+        </geometry>
+    </visual>
+  </link>
+</robot>
