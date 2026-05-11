@@ -1,0 +1,17 @@
+grid: 
+ resolution: 0.5
+ origin: [0.0, 0.0]
+ width: 20
+ height: 20
+
+flight: 
+ altitude: 0.5
+ yaw: 0.0
+
+agents:
+ Robot_1:
+  id: 3
+  topic: /Robot_1/waypoint
+ Robot_3:
+  id: 5
+  topic: /Robot_3/waypoint

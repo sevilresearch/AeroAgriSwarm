@@ -1,0 +1,33 @@
+#
+# Definition of all trackable objects
+# Identifier corresponds to Trackable ID set in Tracking Tools
+#
+mocap_node:
+  ros__parameters:
+    multicast_address: 239.255.42.99
+    local_address: 192.168.15.111
+    command_port: 1510
+    data_port: 1511
+    enable_optitrack: true
+    server_version: auto  
+    rigid_bodies:
+      '3':
+        pose: Robot_1/pose
+        pose2d: Robot_1/ground_pose
+        odom: Robot_1/Odom
+        child_frame_id: Robot_1/base_link
+        parent_frame_id: world
+      '4':
+        pose: Robot_2/pose
+        pose2d: Robot_2/ground_pose
+        odom: Robot_2/Odom
+        child_frame_id: Robot_2/base_link
+        parent_frame_id: world
+      '5':
+        pose: Robot_3/pose
+        pose2d: Robot_3/ground_pose
+        odom: Robot_3/Odom
+        child_frame_id: Robot_3/base_link
+        parent_frame_id: world
+
+       
