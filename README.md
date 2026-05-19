@@ -91,10 +91,13 @@ algorithm and a local planner for a effcient cost-path planning exploration.</p>
 -----------------------------------------------------------------------------------------------------
  #### Demo
 
-   [![Watch the video](https://youtube.com)]()
+   [Demo Video Link](https://youtu.be/hmJx0Xza-Bs)
 
 -----------------------------------------------------------------------------------------------------
- #### Related Work
-
+ #### References
+ 
+ [1] Jogeshwar, B.K., Sevil, H.E., Haghshenas-Jaryani, M., "Multi-Agent Coverage Planning for 
+     Agricultural Soil and Crop Monitoring", accepted for ASME 2025 International Mechanical
+     Engineering Congress and Exposition (IMECE2025), Memphis, USA, 16-20 November 2025.
  
  
