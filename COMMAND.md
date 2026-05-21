@@ -1,12 +1,8 @@
-# Terminal commands for different scripts
+# Terminal Commands for Different Programs
 
 -----------------------------------------------------------------------------------------------------
 
-### Crazyflie 2.1
-### Cflib version 0.1.28
-### ROS 2 (Humble) Workspace
-
-------------------------------------------------------------------------------------------------------
+<b>Note:</b> Check the directory path before running
 
 #### 1. Source all terminal:
 
