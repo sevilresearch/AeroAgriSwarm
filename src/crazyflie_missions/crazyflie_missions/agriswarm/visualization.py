@@ -10,26 +10,14 @@ import shutil
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# simulation_time = round(0.00, 2)
-# time_step = round(0.01, 2)
-# movement_time_step = round(0.01, 2)
-# planting_time_step = round(1.00, 2)
-# watering_time_step = round(0.25, 2)
-# waiting_time_step = round(0.63, 2)
-
+# Both simulation_time and time_step is redefined in the run_simulation function, but it serves the same purpose and it is only used in this file.
 simulation_time = round(0.00, 2)
-time_step = round(0.01, 2)
-movement_time_step = round(0.1, 2)
-planting_time_step = round(1.00, 2)
-watering_time_step = round(0.25, 2)
-waiting_time_step = round(0.02, 2)
+time_step = round(1.00, 2) # in seconds or arbitrary units. 1 simulation units advance each simulation iteration
 
-# simulation_time = round(0.00, 2)
-# time_step = round(0.15, 2)
-# movement_time_step = round(0.03, 2)
-# planting_time_step = round(1.20, 2)
-# watering_time_step = round(0.1, 2)
-# waiting_time_step = round(0.40, 2)
+movement_time_step = round(0.1, 2) # Default = 0.1
+planting_time_step = round(1.00, 2) # Default = 1.00
+watering_time_step = round(0.25, 2) # Default = 0.25
+waiting_time_step = round(0.02, 2) # Default = 0.02
 
 
 # Load the Twemoji font for emojis
@@ -179,51 +167,63 @@ def display_grid(grid, agents, state_estimator, behavior_planner, record=False):
 
     plt.ion()  # Enable interactive mode
     
-    try:
-        TARGET_DT = 0.2   # 0.2 sec → 5 Hz (matches drones nicely)
-        while True:
-            loop_start = time.time()
 
-            step_times = []
+    TARGET_DT = 0.2   # 0.2 sec → 5 Hz Update grid simulation while loop to real-time control loop. It does NOT make the drones move grid cells every 0.2.
+    while True:
+        loop_start = time.time()
 
-            for agent in agents:
-                action = agent.select_action()
-                step_time = agent.execute_action(action)
+        step_times = []
+
+        for agent in agents:
+
+            for _ in range(agent.speed):
+
+                # Continue the current farming task if one is active
+                if agent.current_task is not None:
+                    step_time = agent.execute_action(agent.current_task)
+
+                else:
+                    action = agent.select_action()
+                    step_time = agent.execute_action(action)
 
                 if step_time is not None:
                     step_times.append(step_time)
 
-                frame_counter += 1
-                update_grid(visualization.simulation_time, frame_counter if record else None)
-
-            # advance simulation time at FIXED rate (not variable)
-            visualization.simulation_time += TARGET_DT
-
-            sim_time_while_loop += 1
-
-            # ✅ enforce real-time pacing
-            elapsed = time.time() - loop_start
-            sleep_time = TARGET_DT - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-
-            if check_all_cells_visited(grid, agents[0].global_explored_cells):
-                if all(agent.done or agent.is_frozen for agent in agents):
-                    # print("[SIM] Grid fully explored. All agents completed final tasks.")
-                    print(f"sim_time_while_loop: \033[92m'{sim_time_while_loop:.2f}\033[0m' units")
-
-                    time.sleep(2)
+                # Stop further movement if a farming task has started
+                if agent.current_task is not None:
                     break
 
-    except KeyboardInterrupt:
-        print("\nSimulation stopped manually.")
+            frame_counter += 1
+            update_grid(
+                visualization.simulation_time,
+                frame_counter if record else None
+            )
+
+        # advance simulation time at FIXED rate (not variable)
+        visualization.simulation_time += TARGET_DT
+
+        sim_time_while_loop += 1
+
+        # ✅ enforce real-time pacing
+        elapsed = time.time() - loop_start
+        sleep_time = TARGET_DT - elapsed
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+
+        if check_all_cells_visited(grid, agents[0].global_explored_cells):
+            if all(agent.done or agent.is_frozen for agent in agents):
+                # print("[SIM] Grid fully explored. All agents completed final tasks.")
+                print(f"sim_time_while_loop: \033[92m'{sim_time_while_loop:.2f}\033[0m' units")
+
+                time.sleep(2)
+                break
 
     if record:
         stitch_frames_to_gif()
 
     print("[SIM] Finished. Close the window to exit.")
     plt.ioff()        # turn OFF interactive mode
-    plt.show()        # BLOCK here until user closes window
+    #plt.show()        # BLOCK here until user closes window
 
     return visualization.simulation_time
 
@@ -249,15 +249,22 @@ def run_simulation(grid, agents, state_estimator, behavior_planner):
     signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C
     from crazyflie_missions.agriswarm import visualization
     visualization.simulation_time = 0
-    visualization.time_step = 1  # in seconds or arbitrary units
+    visualization.time_step = 1.00  # in seconds or arbitrary units
 
     try:
         while True:
             visualization.simulation_time += visualization.time_step
-            # print(simulation_time)
 
             for agent in agents:
-                agent.execute_action(agent.select_action())  # Execute each agent's action
+                for _ in range(agent.speed):
+                    if agent.current_task is not None:
+                        agent.execute_action(agent.current_task)
+                    else:
+                        action = agent.select_action()
+                        agent.execute_action(action)
+                    # Stop further movement if a farming task has started
+                    if agent.current_task is not None:
+                        break
             
             if check_all_cells_visited(grid, agents[0].global_explored_cells):  # Stop if all cells are planted
                 if all(agent.done or agent.is_frozen for agent in agents):

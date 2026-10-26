@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import time
 import math
+from crazyflie_missions.agriswarm.agriswarm_node import CALIBRATION_MODE
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, Twist
 from std_msgs.msg import Empty
+from std_msgs.msg import Bool
 
 
 class WaypointManagerMulti(Node):
@@ -35,6 +37,7 @@ class WaypointManagerMulti(Node):
                 "mode": "WAYPOINT", # AGRI or WAYPOINT
                 "last_mode_switch_time": time.time(),
                 "last_goal_time": 0.0,
+                "goal_sent": False,
             },
             "Robot_3": {
                 "pose": None,
@@ -53,6 +56,7 @@ class WaypointManagerMulti(Node):
                 "mode": "WAYPOINT", # AGRI or WAYPOINT
                 "last_mode_switch_time": time.time(),
                 "last_goal_time": 0.0,
+                "goal_sent": False,
             },
         }
 
@@ -108,7 +112,7 @@ class WaypointManagerMulti(Node):
             self.drones[name]["takeoff_pub"] = self.create_publisher(Empty, f"/{name}/takeoff", 10)
             self.drones[name]["land_pub"] = self.create_publisher(Empty, f"/{name}/land", 10)
             self.drones[name]["cmd_pub"] = self.create_publisher(Twist, f"/{name}/cmd_vel", 10)
-
+            self.drones[name]["goal_pub"] = self.create_publisher(Bool, f"/{name}/goal_reached", 10)
 
         # Run control loop at 20 Hz
         self.timer = self.create_timer(0.05, self.loop)
@@ -128,6 +132,7 @@ class WaypointManagerMulti(Node):
             msg.pose.position.z
         ]
         self.drones[name]["last_goal_time"] = time.time()
+        self.drones[name]["goal_sent"] = False
 
     # ----------------------------------------------------------------------
     def compute_velocity(self, name, target):
@@ -225,7 +230,11 @@ class WaypointManagerMulti(Node):
             time_since_goal = now - drone["last_goal_time"]
             time_since_switch = now - drone["last_mode_switch_time"]
 
-            desired_mode = "AGRI" if time_since_goal < self.goal_timeout else "WAYPOINT"
+            if CALIBRATION_MODE:
+                # Never switch back to WAYPOINT during calibration
+                desired_mode = "AGRI"
+            else:
+                desired_mode = "AGRI" if time_since_goal < self.goal_timeout else "WAYPOINT"
 
             if desired_mode != drone["mode"] and time_since_switch > self.mode_switch_cooldown:
                 drone["mode"] = desired_mode
@@ -235,10 +244,8 @@ class WaypointManagerMulti(Node):
             # ----------------------------
             # Target selection
             # ----------------------------
-            if drone["mode"] == "AGRI" and drone["current_goal"] is not None and time_since_goal < self.goal_timeout:
-                target = drone["current_goal"]
+            if drone["mode"] == "WAYPOINT":
 
-            else:
                 if drone["target"] >= len(drone["waypoints"]):
                     self.get_logger().info(f"{name}: Waypoint mission complete — landing.")
                     drone["cmd_pub"].publish(Twist())
@@ -247,6 +254,15 @@ class WaypointManagerMulti(Node):
                     continue
 
                 target = drone["waypoints"][drone["target"]]
+
+            elif drone["mode"] == "AGRI":
+
+                if drone["current_goal"] is None:
+                    # Stay hovering while waiting for a goal.
+                    drone["cmd_pub"].publish(Twist())
+                    continue
+
+                target = drone["current_goal"]
 
             # ----------------------------
             # Control
@@ -265,9 +281,16 @@ class WaypointManagerMulti(Node):
                 if drone["mode"] == "WAYPOINT":
                     self.get_logger().info(f"{name}: Reached waypoint {drone['target']+1}")
                     drone["target"] += 1
-                else:
-                    self.get_logger().info(f"{name}: Reached Agriswarm goal")
-                    drone["current_goal"] = None  # prevents spam
+
+                elif drone["mode"] == "AGRI":
+                    
+                    if not drone["goal_sent"]:
+                        self.get_logger().info(f"{name}: Reached Agriswarm goal")
+                        # Keep current_goal so the drone holds position until a new goal arrives.
+                        msg = Bool()
+                        msg.data = True
+                        drone["goal_pub"].publish(msg)
+                        drone["goal_sent"] = True
 
                 drone["cmd_pub"].publish(Twist())
                 time.sleep(0.5)

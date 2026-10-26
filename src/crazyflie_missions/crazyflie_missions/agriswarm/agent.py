@@ -2,6 +2,7 @@ import numpy as np
 from crazyflie_missions.agriswarm.state_estimation import StateEstimator
 import time
 import heapq
+import random
 from crazyflie_missions.agriswarm import visualization
 
 class Agent:
@@ -25,6 +26,19 @@ class Agent:
         self.behavior_planner = behavior_planner  # <- Injected planner       
         self.is_frozen = False  # Used to freeze an agent mid-simulation
         self.blocked_cell_attempts = {}  # (x, y): count of failed checks
+        self.retries = 0
+        self.current_task = None
+        self.speed = 1
+
+        # Statistics
+        self.total_task_duration = 0.0
+        self.total_planting_duration = 0.0
+        self.total_watering_duration = 0.0
+        self.total_plant_retries = 0
+        self.total_water_retries = 0
+        self.planted_cells = 0
+        self.watered_cells = 0
+        self.total_reroutes = 0
 
         self.update_position(self.x, self.y)  # Mark the initial cell properly
 
@@ -240,7 +254,7 @@ class Agent:
             heapq.heappush(open_set, (0, start[0], start[1], []))
             g_costs = {start: 0}
             visited = set()
-
+            
             while open_set:
                 f, x, y, path = heapq.heappop(open_set)
                 if (x, y) == end:
@@ -272,8 +286,10 @@ class Agent:
                 # visualization.simulation_time += visualization.waiting_time_step
 
                 if self.blocked_cell_attempts[key] >= self.reroute_threshold:
-                    # print(f"[{self.color}] Rerouting from blocked reroute step {key}")
+                   
+                    self.total_reroutes = self.total_reroutes + 1
                     self.reroute_around(key)
+                    self.blocked_cell_attempts.pop(key, None)
                 return visualization.waiting_time_step
 
             else:
@@ -295,9 +311,10 @@ class Agent:
                 self.blocked_cell_attempts[key] = self.blocked_cell_attempts.get(key, 0) + 1
 
                 if self.blocked_cell_attempts[key] >= self.reroute_threshold:  # Threshold to reroute
-                    # print(f"[{self.color}] Waiting on cell {key} - attempt {self.blocked_cell_attempts[key]}")
-                    # print(f"[{self.color}] Rerouting from blocked cell {key}")
+                   
+                    self.total_reroutes = self.total_reroutes + 1
                     self.reroute_around(key)
+                    self.blocked_cell_attempts.pop(key, None)
                 # else:
                     # print(f"[{self.color}] Waiting on cell {key} - attempt {self.blocked_cell_attempts[key]}")
                 return visualization.waiting_time_step
@@ -330,6 +347,7 @@ class Agent:
         if cell_info['crop_status'] == 0:
             self.wait_until = time.time() + 0.1  # Set personal wait timer
             # visualization.simulation_time += visualization.planting_time_step
+            self.planted_cells = self.planted_cells + 1
             self.grid.update_cell(self.x, self.y, [cell_info['soil_type'], cell_info['moisture_level'], 1])
 
     def water(self):
@@ -338,15 +356,14 @@ class Agent:
         if cell_info['moisture_level'] == 0:
             self.wait_until = time.time() + 0.025  # Set personal wait timer
             # visualization.simulation_time += visualization.watering_time_step
+            self.watered_cells = self.watered_cells + 1
             self.grid.update_cell(self.x, self.y, [cell_info['soil_type'], 1, cell_info['crop_status']])
 
     def execute_action(self, action):
         """Perform the selected action."""
-
-
         if self.is_frozen or action is None:
             self.done = True
-            return  # Do nothing if frozen or no action
+            return
 
         self.done = False  # Reset, assuming we'll take a valid action
 
@@ -355,15 +372,60 @@ class Agent:
             return move_time 
 
         elif action == 'plant':
-            self.plant()
+            if self.current_task is None:
+
+                self.current_task = 'plant'
+
+                self.retries = random.randint(1,10)
+
+                self.total_plant_retries += self.retries
+
+                duration = self.retries * visualization.planting_time_step
+
+                self.total_planting_duration += duration
+                self.total_task_duration += duration
+
+                return visualization.planting_time_step
+            self.retries -= 1
+
+            if self.retries <= 0:
+                self.plant()
+                self.current_task = None
+
             return visualization.planting_time_step
         elif action == 'water':
-            self.water()
+            if self.current_task is None:
+
+                self.current_task = 'water'
+
+                self.retries = random.randint(1,10)
+
+                self.total_water_retries += self.retries
+
+                duration = self.retries * visualization.watering_time_step
+
+                self.total_watering_duration += duration
+                self.total_task_duration += duration
+
+                return visualization.watering_time_step
+            self.retries -= 1
+
+            if self.retries <= 0:
+                self.water()
+
+                self.grid.update_cell(
+                    self.x,
+                    self.y,
+                    [
+                        self.grid.get_cell_info(self.x,self.y)['soil_type'],
+                        1,
+                        self.grid.get_cell_info(self.x,self.y)['crop_status']
+                    ]
+                )
+
+                self.current_task = None
+
             return visualization.watering_time_step
-            # Ensure watered cell is updated
-            self.grid.update_cell(self.x, self.y, [self.grid.get_cell_info(self.x, self.y)['soil_type'],
-                                                   1,  
-                                                   self.grid.get_cell_info(self.x, self.y)['crop_status']])
 
         # After trying everything, recheck:
         if not self.path_queue and action is None:

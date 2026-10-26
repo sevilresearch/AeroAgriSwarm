@@ -1,3 +1,5 @@
+from builtins import UserWarning
+
 from crazyflie_missions.agriswarm.grid import Grid
 from crazyflie_missions.agriswarm.agent import Agent
 from crazyflie_missions.agriswarm.state_estimation import StateEstimator
@@ -9,7 +11,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="tkinter")
 import numpy as np
 import time
 
-def create_seeded_grid(size=(4, 4), seed=42):
+def create_seeded_grid(size=(52, 50), seed=42):
     """Create a grid with a fixed seed for reproducibility."""
     np.random.seed(seed)  # Set the seed
     grid = Grid(size=size)  # Initialize grid (this calls initialize_grid with seeded random)
@@ -22,9 +24,18 @@ def print_stats_main(run, agents):
         print(f"  Total cells travelled: {agent.cells_travelled}")
         # print(f"  visited cells travelled: {agent.agents_actual_visited_cells}")
         # print(f"  visited cells travelled: {agent.visited_cells}")
-
+        print(f"  Total planting duration: {agent.total_planting_duration:.2f}")
+        print(f"  Total watering duration: {agent.total_watering_duration:.2f}")
+        print(f"  Total task duration: {agent.total_task_duration:.2f}")
+        print(f"  Total planting retries: {agent.total_plant_retries}")
+        print(f"  Total watering retries: {agent.total_water_retries}")
         print(f"  Total revisits: {agent.revisit_count}")
+        print(f"  Number of blockage attempts that could trigger reroutes: {agent.total_reroutes}")
         print(f"  Percentage of revisited cells: {agent.get_revisit_percentage():.2f}%")
+    
+    print(f"Total planted cells by all agents: {sum(agent.planted_cells for agent in agents)}")
+    print(f"Total watered cells by all agents: {sum(agent.watered_cells for agent in agents)}")
+    print(f"Total number of blockage attempts that could trigger reroutes for all agents: {sum(agent.total_reroutes for agent in agents)}")
 
 def main():
 
@@ -33,16 +44,16 @@ def main():
 
     use_preassigned = False
 
-    no_of_agents = 2  # Change to 1, 2, 3, or 4
+    no_of_agents = 5  # Change to 1, 2, 3, or 4
 
     # Predefined, editable start positions
-    agent_pos_1 = [(0, 0)]
-    agent_pos_2 = [(0, 0), (1, 0)]
-    agent_pos_3 = [(0, 0), (1, 0), (2, 0)]
+    agent_pos_1 = [(14, 0)]
+    agent_pos_2 = [(13, 0), (14, 0)]
+    agent_pos_3 = [(12, 0), (13, 0), (14, 0)]
     # agent_pos_3 = [(2, 0), (5, 0), (12, 0)]             # interesting start positions #1
     # agent_pos_3 = [(3, 4), (9, 4), (12, 2)]             # interesting start positions #1
     # agent_pos_4 = [(0, 0), (1, 0), (2, 0), (3, 0)]
-    agent_pos_4 = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]
+    agent_pos_4 = [(45,0), (46, 0), (47, 0), (48,0), (49,0)]            
 
     # Assign based on the agent count
     if no_of_agents == 1:
@@ -51,11 +62,11 @@ def main():
         agent_positions = agent_pos_2
     elif no_of_agents == 3:
         agent_positions = agent_pos_3
-    elif no_of_agents == 4:
+    elif no_of_agents == 5:
         agent_positions = agent_pos_4
 
     for run in range(runs):
-        base_grid = create_seeded_grid(size=(4, 4), seed=seed + run)  # vary seed per run if needed
+        base_grid = create_seeded_grid(size=(52, 50), seed=seed + run)  # vary seed per run if needed
 
         start_time = time.time()
         global_explored_cells = set()
@@ -64,8 +75,8 @@ def main():
         # agent.set_shared_memory(global_explored_cells)
         agents = []
 
-        # Initialize the 10x10 farm environment
-        grid = Grid(size=(4, 4))
+        # Initialize the farm environment
+        grid = Grid(size=(52, 50))
         grid.grid = base_grid.grid.copy()  # Copy the random grid state
         grid.boundaries = base_grid.boundaries.copy()  # Copy the boundaries
         
@@ -76,7 +87,7 @@ def main():
             reroute_threshold = 20
         else:
             behavior_planner = LocalPlanner()
-            reroute_threshold = 3
+            reroute_threshold = 5
 
 
         agents = [Agent(grid, global_explored_cells, reroute_threshold, pos, [], behavior_planner=behavior_planner) for pos in agent_positions]
